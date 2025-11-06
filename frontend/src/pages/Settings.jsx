@@ -139,7 +139,7 @@ export default function Settings() {
         <div className="relative rounded-2xl p-[1px] bg-gradient-to-r from-emerald-400/35 to-sky-400/35">
           <div className="rounded-[14px] ring-1 ring-white/10 bg-[#0f1530]/80 p-6">
             <h2 className="font-medium mb-2">Email integration</h2>
-            <p className="text-slate-300 mb-4 text-sm">Connect Gmail to ingest attachments automatically and trigger verification.</p>
+            <p className="text-slate-300 mb-4 text-sm">Connect your email to sync tasks and deadlines automatically.</p>
             <div className="flex flex-wrap gap-2">
               <button className="px-4 py-2 rounded text-white bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-400 hover:to-emerald-400">Connect Gmail</button>
               <button className="px-4 py-2 rounded border border-white/10 hover:bg-white/10">Test fetch</button>

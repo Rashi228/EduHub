@@ -14,10 +14,11 @@ import jwt
 from dotenv import load_dotenv
 from bson import ObjectId
 
-from ocr import image_paths_from_upload, ocr_text_from_paths
-from parse import parse_fields
-from compare import compare_docs
-from export import generate_csv_from_records
+# InvoSync imports (disabled for EduHub)
+# from ocr import image_paths_from_upload, ocr_text_from_paths
+# from parse import parse_fields
+# from compare import compare_docs
+# from export import generate_csv_from_records
 from ml_models import (
 	get_recommendation_engine, get_task_prioritizer, 
 	get_mood_predictor, get_note_classifier
@@ -36,13 +37,69 @@ UPLOAD_DIR = os.getenv('UPLOAD_DIR', os.path.join(os.path.dirname(__file__), 'up
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 # Initialize Gemini AI
+gemini_model = None  # Initialize before try block
+
 if GEMINI_API_KEY:
 	try:
 		genai.configure(api_key=GEMINI_API_KEY)
-		gemini_model = genai.GenerativeModel('gemini-pro')
-		logger.info("Gemini AI initialized successfully")
+		
+		# Try to list available models first
+		available_models = []
+		try:
+			for model in genai.list_models():
+				if 'generateContent' in model.supported_generation_methods:
+					available_models.append(model.name)
+			logger.info(f"Available models: {available_models[:5]}...")  # Log first 5
+		except Exception as list_err:
+			logger.warning(f"Could not list models: {list_err}")
+		
+		# Try different model names - prioritize newer models that are available
+		model_names = [
+			'gemini-2.5-flash',           # Latest Flash (from your available models)
+			'gemini-2.5-pro-preview-05-06',  # Latest Pro preview
+			'gemini-1.5-pro-latest',     # 1.5 Pro latest
+			'gemini-1.5-pro',             # 1.5 Pro
+			'gemini-1.5-flash-latest',    # 1.5 Flash latest
+			'gemini-1.5-flash',            # 1.5 Flash
+			'gemini-pro',                  # Pro (fallback)
+		]
+		
+		# If we found available models, use the first one that matches
+		if available_models:
+			for model_name in model_names:
+				full_model_name = f"models/{model_name}"
+				if full_model_name in available_models:
+					try:
+						logger.info(f"Using available model: {model_name}")
+						gemini_model = genai.GenerativeModel(model_name)
+						logger.info(f"Gemini AI initialized successfully with {model_name}")
+						break
+					except Exception as model_err:
+						logger.debug(f"Model {model_name} failed: {model_err}")
+						continue
+		
+		# If no model found from available list, try direct initialization
+		if not gemini_model:
+			for model_name in model_names:
+				try:
+					logger.info(f"Trying to initialize model: {model_name}")
+					gemini_model = genai.GenerativeModel(model_name)
+					# Test the model with a simple request
+					test_response = gemini_model.generate_content("Hi")
+					logger.info(f"Gemini AI initialized successfully with {model_name}")
+					break
+				except Exception as model_err:
+					logger.debug(f"Model {model_name} failed: {model_err}")
+					continue
+		
+		if not gemini_model:
+			error_msg = "All Gemini model attempts failed. Please check your API key and available models."
+			if available_models:
+				error_msg += f" Available models: {available_models[:5]}"
+			raise Exception(error_msg)
+			
 	except Exception as e:
-		logger.warning("Failed to initialize Gemini AI: %s", e)
+		logger.exception("Failed to initialize Gemini AI: %s", e)
 		gemini_model = None
 else:
 	logger.warning("GEMINI_API_KEY not found, AI features disabled")
@@ -53,8 +110,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 client = MongoClient(MONGO_URI)
 db = client.get_default_database()
 users = db['users']
-verifications = db['verifications']
-exports = db['exports']
+# InvoSync collections (disabled for EduHub)
+# verifications = db['verifications']
+# exports = db['exports']
 # EduHub collections
 resources = db['resources']
 streaks = db['streaks']
@@ -82,370 +140,372 @@ def decode_token(token: str):
 	return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])  # raises on error
 
 
-@app.post('/api/auth/signup')
-def signup():
-	try:
-		data = request.get_json(force=True) or {}
-		email = (data.get('email') or '').strip().lower()
-		name = (data.get('name') or '').strip()
-		password = data.get('password') or ''
-		if not email or not password:
-			return jsonify({"error": "email and password required"}), 400
-		if users.find_one({"email": email}):
-			return jsonify({"error": "email already registered"}), 409
-		hash_ = generate_password_hash(password)
-		res = users.insert_one({
-			"email": email,
-			"name": name,
-			"password": hash_,
-			"createdAt": datetime.now(timezone.utc),
-		})
-		token = create_token(res.inserted_id)
-		logger.info("User signup: email=%s", email)
-		return jsonify({"token": token, "user": {"id": str(res.inserted_id), "email": email, "name": name}}), 200
-	except Exception as e:
-		logger.exception("Signup error: %s", e)
-		return jsonify({"error": "signup_failed"}), 500
+# ==================== Authentication Endpoints (DISABLED) ====================
+# Authentication is disabled - app works without login/signup
+# All users use a demo user ID: "demo_user_123"
 
+# @app.post('/api/auth/signup')
+# def signup():
+# 	try:
+# 		data = request.get_json(force=True) or {}
+# 		email = (data.get('email') or '').strip().lower()
+# 		name = (data.get('name') or '').strip()
+# 		password = data.get('password') or ''
+# 		if not email or not password:
+# 			return jsonify({"error": "email and password required"}), 400
+# 		if users.find_one({"email": email}):
+# 			return jsonify({"error": "email already registered"}), 409
+# 		hash_ = generate_password_hash(password)
+# 		res = users.insert_one({
+# 			"email": email,
+# 			"name": name,
+# 			"password": hash_,
+# 			"createdAt": datetime.now(timezone.utc),
+# 		})
+# 		token = create_token(res.inserted_id)
+# 		logger.info("User signup: email=%s", email)
+# 		return jsonify({"token": token, "user": {"id": str(res.inserted_id), "email": email, "name": name}}), 200
+# 	except Exception as e:
+# 		logger.exception("Signup error: %s", e)
+# 		return jsonify({"error": "signup_failed"}), 500
 
-@app.post('/api/auth/login')
-def login():
-	try:
-		data = request.get_json(force=True) or {}
-		email = (data.get('email') or '').strip().lower()
-		password = data.get('password') or ''
-		if not email or not password:
-			return jsonify({"error": "email and password required"}), 400
-		user = users.find_one({"email": email})
-		if not user or not check_password_hash(user.get('password', ''), password):
-			logger.warning("Login failed for email=%s", email)
-			return jsonify({"error": "invalid credentials"}), 401
-		token = create_token(user['_id'])
-		logger.info("User login: email=%s", email)
-		return jsonify({"token": token, "user": {"id": str(user['_id']), "email": user['email'], "name": user.get('name', '')}}), 200
-	except Exception as e:
-		logger.exception("Login error: %s", e)
-		return jsonify({"error": "login_failed"}), 500
-
+# @app.post('/api/auth/login')
+# def login():
+# 	try:
+# 		data = request.get_json(force=True) or {}
+# 		email = (data.get('email') or '').strip().lower()
+# 		password = data.get('password') or ''
+# 		if not email or not password:
+# 			return jsonify({"error": "email and password required"}), 400
+# 		user = users.find_one({"email": email})
+# 		if not user or not check_password_hash(user.get('password', ''), password):
+# 			logger.warning("Login failed for email=%s", email)
+# 			return jsonify({"error": "invalid credentials"}), 401
+# 		token = create_token(user['_id'])
+# 		logger.info("User login: email=%s", email)
+# 		return jsonify({"token": token, "user": {"id": str(user['_id']), "email": user['email'], "name": user.get('name', '')}}), 200
+# 	except Exception as e:
+# 		logger.exception("Login error: %s", e)
+# 		return jsonify({"error": "login_failed"}), 500
 
 @app.get('/api/auth/me')
 def me():
-	try:
-		auth = request.headers.get('Authorization', '')
-		if not auth.startswith('Bearer '):
-			return jsonify({"error": "missing token"}), 401
-		token = auth.split(' ', 1)[1]
-		try:
-			payload = decode_token(token)
-		except Exception as e:
-			logger.warning("Token decode failed: %s", e)
-			return jsonify({"error": "invalid token"}), 401
-		user = users.find_one({"_id": ObjectId(payload['sub'])})
-		if not user:
-			return jsonify({"error": "user not found"}), 404
-		return jsonify({"user": {"id": str(user['_id']), "email": user['email'], "name": user.get('name', '')}}), 200
-	except Exception as e:
-		logger.exception("Me endpoint error: %s", e)
-		return jsonify({"error": "authentication_failed"}), 500
-
-
-@app.post('/api/verify')
-def verify():
-	"""Accepts multipart/form-data with fields invoice and po. Returns extraction and comparison."""
-	debug = request.args.get('debug') == '1'
-	stage = {}
-	try:
-		stage['t0'] = time.perf_counter()
-		if 'invoice' not in request.files or 'po' not in request.files:
-			return jsonify({"error": "Both 'invoice' and 'po' files are required"}), 400
-
-		invoice_file = request.files['invoice']
-		po_file = request.files['po']
-		logger.info("/verify received files invoice=%s po=%s", invoice_file.filename, po_file.filename)
-
-		allowed = {'.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff'}
-		def _save(file):
-			name = file.filename or 'upload'
-			ext = os.path.splitext(name)[1].lower()
-			if ext not in allowed:
-				raise ValueError('Unsupported file type: ' + ext)
-			path = os.path.join(UPLOAD_DIR, f"{datetime.now(timezone.utc).timestamp()}_{name}")
-			file.save(path)
-			return path
-
-		inv_path = _save(invoice_file)
-		po_path = _save(po_file)
-		logger.info("Saved uploads to inv_path=%s po_path=%s", inv_path, po_path)
-		stage['t_saved'] = time.perf_counter()
-
-		inv_imgs = image_paths_from_upload(inv_path)
-		po_imgs = image_paths_from_upload(po_path)
-		logger.info("Image paths expanded inv=%s po=%s", inv_imgs, po_imgs)
-		stage['t_images'] = time.perf_counter()
-
-		inv_text = ocr_text_from_paths(inv_imgs)
-		po_text = ocr_text_from_paths(po_imgs)
-		logger.info("OCR text lens inv=%d po=%d", len(inv_text or ''), len(po_text or ''))
-		# Log first few lines for quick inspection
-		logger.info("OCR inv head: %s", (inv_text or '').splitlines()[:5])
-		logger.info("OCR po head: %s", (po_text or '').splitlines()[:5])
-		stage['t_ocr'] = time.perf_counter()
-
-		inv_data = parse_fields(inv_text)
-		po_data = parse_fields(po_text)
-		logger.info("Parsed invoice fields: %s", {k: inv_data.get(k) for k in ['vendor','invoiceNo','orderId','date','total']})
-		logger.info("Parsed PO fields: %s", {k: po_data.get(k) for k in ['vendor','invoiceNo','orderId','date','total']})
-		stage['t_parse'] = time.perf_counter()
-
-		# Heuristics from file names if fields missing
-		import re as _re
-		def _from_name(name: str, pats):
-			for p in pats:
-				m = _re.search(p, name, _re.I)
-				if m:
-					return m.group(1)
-			return ''
-		inv_name = invoice_file.filename or ''
-		po_name = po_file.filename or ''
-		if not inv_data.get('invoiceNo'):
-			inv_data['invoiceNo'] = _from_name(inv_name, [r"inv(?:oice)?[_-]?([A-Za-z0-9-_/]+)", r"([A-Za-z]{2,}-?\d+)"])
-		if not inv_data.get('orderId'):
-			inv_data['orderId'] = _from_name(inv_name, [r"po[_-]?([A-Za-z0-9-_/]+)"])
-		if not po_data.get('orderId'):
-			po_data['orderId'] = _from_name(po_name, [r"po[_-]?([A-Za-z0-9-_/]+)", r"order[_-]?id[_-]?([A-Za-z0-9-_/]+)"])
-		if not po_data.get('invoiceNo'):
-			po_data['invoiceNo'] = _from_name(po_name, [r"inv(?:oice)?[_-]?([A-Za-z0-9-_/]+)"])
-
-		result = compare_docs(inv_data, po_data)
-		logger.info("Compare result: status=%s, discrepancies=%d", result.get('status'), len(result.get('discrepancies', [])))
-		stage['t_compare'] = time.perf_counter()
-
-		created = datetime.now(timezone.utc)
-		doc = {
-			"invoice": inv_data,
-			"po": po_data,
-			"result": result,
-			"createdAt": created,
-		}
-		res = verifications.insert_one(doc)
-		logger.info("Saved verification id=%s", res.inserted_id)
-		stage['t_saved_db'] = time.perf_counter()
-
-		payload = {
-			"id": str(res.inserted_id),
-			"invoice": inv_data,
-			"po": po_data,
-			"result": result,
-			"createdAt": created.isoformat()
-		}
-		if debug:
-			payload["debug"] = {
-				"invoiceTextLen": len(inv_text or ''),
-				"poTextLen": len(po_text or ''),
-				"invoiceTextHead": '\n'.join((inv_text or '').splitlines()[:15]),
-				"poTextHead": '\n'.join((po_text or '').splitlines()[:15]),
-				"invoiceParsed": inv_data,
-				"poParsed": po_data,
-				"timingsMs": {
-					"save": int((stage['t_saved']-stage['t0'])*1000),
-					"images": int((stage['t_images']-stage['t_saved'])*1000),
-					"ocr": int((stage['t_ocr']-stage['t_images'])*1000),
-					"parse": int((stage['t_parse']-stage['t_ocr'])*1000),
-					"compare": int((stage['t_compare']-stage['t_parse'])*1000),
-					"db": int((stage['t_saved_db']-stage['t_compare'])*1000),
-				},
-			}
-		return jsonify(payload)
-	except Exception as e:
-		logger.exception("/verify error: %s", e)
-		if debug:
-			return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
-		return jsonify({"error": "verification_failed"}), 500
-
-
-@app.get('/api/stats')
-def stats():
-	matched = verifications.count_documents({"result.status": "matched"})
-	partial = verifications.count_documents({"result.status": "partial"})
-	mismatch = verifications.count_documents({"result.status": "mismatch"})
-	pending = 0
-	last_doc = verifications.find_one(sort=[("createdAt", DESCENDING)])
-	last_export = last_doc.get('createdAt') if last_doc else None
+	"""Return demo user info (authentication disabled)."""
 	return jsonify({
-		"matched": matched,
-		"discrepancies": partial + mismatch,
-		"pending": pending,
-		"lastExport": last_export.isoformat() if last_export else None,
-	})
+		"user": {
+			"id": "demo_user_123",
+			"email": "demo@eduhub.com",
+			"name": "Demo User"
+		}
+	}), 200
 
 
-@app.get('/api/records')
-def records():
-	limit = int(request.args.get('limit', '20'))
-	items = []
-	for d in verifications.find().sort("createdAt", DESCENDING).limit(limit):
-		inv = d.get("invoice", {})
-		po = d.get("po", {})
-		items.append({
-			"id": str(d["_id"]),
-			"vendor": (inv.get("vendor") or po.get("vendor") or ""),
-			"invoiceNo": inv.get("invoiceNo") or po.get("invoiceNo"),
-			"orderId": inv.get("orderId") or po.get("orderId"),
-			"invoiceDate": inv.get("date"),
-			"amount": inv.get("total"),
-			"status": d.get("result", {}).get("status"),
-			"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
-		})
-	return jsonify({"items": items})
+# ==================== InvoSync Endpoints (DISABLED - EduHub project only) ====================
+# These endpoints are from the InvoSync project and are not used in EduHub
+# Uncomment if you need invoice verification features
+
+# @app.post('/api/verify')
+# def verify():
+# 	"""Accepts multipart/form-data with fields invoice and po. Returns extraction and comparison."""
+# 	debug = request.args.get('debug') == '1'
+# 	stage = {}
+# 	try:
+# 		stage['t0'] = time.perf_counter()
+# 		if 'invoice' not in request.files or 'po' not in request.files:
+# 			return jsonify({"error": "Both 'invoice' and 'po' files are required"}), 400
+#
+# 		invoice_file = request.files['invoice']
+# 		po_file = request.files['po']
+# 		logger.info("/verify received files invoice=%s po=%s", invoice_file.filename, po_file.filename)
+#
+# 		allowed = {'.pdf', '.png', '.jpg', '.jpeg', '.tif', '.tiff'}
+# 		def _save(file):
+# 			name = file.filename or 'upload'
+# 			ext = os.path.splitext(name)[1].lower()
+# 			if ext not in allowed:
+# 				raise ValueError('Unsupported file type: ' + ext)
+# 			path = os.path.join(UPLOAD_DIR, f"{datetime.now(timezone.utc).timestamp()}_{name}")
+# 			file.save(path)
+# 			return path
+#
+# 		inv_path = _save(invoice_file)
+# 		po_path = _save(po_file)
+# 		logger.info("Saved uploads to inv_path=%s po_path=%s", inv_path, po_path)
+# 		stage['t_saved'] = time.perf_counter()
+#
+# 		inv_imgs = image_paths_from_upload(inv_path)
+# 		po_imgs = image_paths_from_upload(po_path)
+# 		logger.info("Image paths expanded inv=%s po=%s", inv_imgs, po_imgs)
+# 		stage['t_images'] = time.perf_counter()
+#
+# 		inv_text = ocr_text_from_paths(inv_imgs)
+# 		po_text = ocr_text_from_paths(po_imgs)
+# 		logger.info("OCR text lens inv=%d po=%d", len(inv_text or ''), len(po_text or ''))
+# 		logger.info("OCR inv head: %s", (inv_text or '').splitlines()[:5])
+# 		logger.info("OCR po head: %s", (po_text or '').splitlines()[:5])
+# 		stage['t_ocr'] = time.perf_counter()
+#
+# 		inv_data = parse_fields(inv_text)
+# 		po_data = parse_fields(po_text)
+# 		logger.info("Parsed invoice fields: %s", {k: inv_data.get(k) for k in ['vendor','invoiceNo','orderId','date','total']})
+# 		logger.info("Parsed PO fields: %s", {k: po_data.get(k) for k in ['vendor','invoiceNo','orderId','date','total']})
+# 		stage['t_parse'] = time.perf_counter()
+#
+# 		import re as _re
+# 		def _from_name(name: str, pats):
+# 			for p in pats:
+# 				m = _re.search(p, name, _re.I)
+# 				if m:
+# 					return m.group(1)
+# 			return ''
+# 		inv_name = invoice_file.filename or ''
+# 		po_name = po_file.filename or ''
+# 		if not inv_data.get('invoiceNo'):
+# 			inv_data['invoiceNo'] = _from_name(inv_name, [r"inv(?:oice)?[_-]?([A-Za-z0-9-_/]+)", r"([A-Za-z]{2,}-?\d+)"])
+# 		if not inv_data.get('orderId'):
+# 			inv_data['orderId'] = _from_name(inv_name, [r"po[_-]?([A-Za-z0-9-_/]+)"])
+# 		if not po_data.get('orderId'):
+# 			po_data['orderId'] = _from_name(po_name, [r"po[_-]?([A-Za-z0-9-_/]+)", r"order[_-]?id[_-]?([A-Za-z0-9-_/]+)"])
+# 		if not po_data.get('invoiceNo'):
+# 			po_data['invoiceNo'] = _from_name(po_name, [r"inv(?:oice)?[_-]?([A-Za-z0-9-_/]+)"])
+#
+# 		result = compare_docs(inv_data, po_data)
+# 		logger.info("Compare result: status=%s, discrepancies=%d", result.get('status'), len(result.get('discrepancies', [])))
+# 		stage['t_compare'] = time.perf_counter()
+#
+# 		created = datetime.now(timezone.utc)
+# 		doc = {
+# 			"invoice": inv_data,
+# 			"po": po_data,
+# 			"result": result,
+# 			"createdAt": created,
+# 		}
+# 		res = verifications.insert_one(doc)
+# 		logger.info("Saved verification id=%s", res.inserted_id)
+# 		stage['t_saved_db'] = time.perf_counter()
+#
+# 		payload = {
+# 			"id": str(res.inserted_id),
+# 			"invoice": inv_data,
+# 			"po": po_data,
+# 			"result": result,
+# 			"createdAt": created.isoformat()
+# 		}
+# 		if debug:
+# 			payload["debug"] = {
+# 				"invoiceTextLen": len(inv_text or ''),
+# 				"poTextLen": len(po_text or ''),
+# 				"invoiceTextHead": '\n'.join((inv_text or '').splitlines()[:15]),
+# 				"poTextHead": '\n'.join((po_text or '').splitlines()[:15]),
+# 				"invoiceParsed": inv_data,
+# 				"poParsed": po_data,
+# 				"timingsMs": {
+# 					"save": int((stage['t_saved']-stage['t0'])*1000),
+# 					"images": int((stage['t_images']-stage['t_saved'])*1000),
+# 					"ocr": int((stage['t_ocr']-stage['t_images'])*1000),
+# 					"parse": int((stage['t_parse']-stage['t_ocr'])*1000),
+# 					"compare": int((stage['t_compare']-stage['t_parse'])*1000),
+# 					"db": int((stage['t_saved_db']-stage['t_compare'])*1000),
+# 				},
+# 			}
+# 		return jsonify(payload)
+# 	except Exception as e:
+# 		logger.exception("/verify error: %s", e)
+# 		if debug:
+# 			return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+# 		return jsonify({"error": "verification_failed"}), 500
 
 
-@app.get('/api/records/<rid>')
-def record_detail(rid: str):
-	try:
-		obj_id = ObjectId(rid)
-	except Exception:
-		return jsonify({"error": "invalid id"}), 400
-	d = verifications.find_one({"_id": obj_id})
-	if not d:
-		return jsonify({"error": "not found"}), 404
-	return jsonify({
-		"id": str(d["_id"]),
-		"invoice": d.get("invoice"),
-		"po": d.get("po"),
-		"result": d.get("result"),
-		"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
-	})
+# @app.get('/api/stats')
+# def stats():
+# 	matched = verifications.count_documents({"result.status": "matched"})
+# 	partial = verifications.count_documents({"result.status": "partial"})
+# 	mismatch = verifications.count_documents({"result.status": "mismatch"})
+# 	pending = 0
+# 	last_doc = verifications.find_one(sort=[("createdAt", DESCENDING)])
+# 	last_export = last_doc.get('createdAt') if last_doc else None
+# 	return jsonify({
+# 		"matched": matched,
+# 		"discrepancies": partial + mismatch,
+# 		"pending": pending,
+# 		"lastExport": last_export.isoformat() if last_export else None,
+# 	})
 
 
-@app.post('/api/export/csv')
-def export_csv():
-	"""Generate corrected invoice CSV from selected records."""
-	try:
-		data = request.get_json(force=True) or {}
-		record_ids = data.get('recordIds', [])
-		date_from = data.get('dateFrom')
-		date_to = data.get('dateTo')
-		status_filter = data.get('status')
-
-		# Build query
-		query = {}
-		if record_ids:
-			query['_id'] = {'$in': [ObjectId(rid) for rid in record_ids]}
-		if date_from or date_to:
-			date_q = {}
-			if date_from:
-				date_q['$gte'] = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-			if date_to:
-				date_q['$lte'] = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-			if date_q:
-				query['createdAt'] = date_q
-		if status_filter:
-			query['result.status'] = status_filter
-
-		records = list(verifications.find(query).sort("createdAt", DESCENDING))
-		if not records:
-			return jsonify({"error": "no records found"}), 404
-
-		csv_content = generate_csv_from_records(records, export_type="corrected")
-		if not csv_content:
-			return jsonify({"error": "no data to export"}), 400
-
-		# Save export history
-		exports.insert_one({
-			"type": "corrected_invoice",
-			"recordCount": len(records),
-			"createdAt": datetime.now(timezone.utc),
-			"query": query
-		})
-
-		logger.info("CSV export generated: %d records", len(records))
-		return jsonify({"csv": csv_content, "filename": f"corrected_invoice_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"}), 200
-	except Exception as e:
-		logger.exception("Export CSV error: %s", e)
-		return jsonify({"error": "export_failed"}), 500
+# @app.get('/api/records')
+# def records():
+# 	limit = int(request.args.get('limit', '20'))
+# 	items = []
+# 	for d in verifications.find().sort("createdAt", DESCENDING).limit(limit):
+# 		inv = d.get("invoice", {})
+# 		po = d.get("po", {})
+# 		items.append({
+# 			"id": str(d["_id"]),
+# 			"vendor": (inv.get("vendor") or po.get("vendor") or ""),
+# 			"invoiceNo": inv.get("invoiceNo") or po.get("invoiceNo"),
+# 			"orderId": inv.get("orderId") or po.get("orderId"),
+# 			"invoiceDate": inv.get("date"),
+# 			"amount": inv.get("total"),
+# 			"status": d.get("result", {}).get("status"),
+# 			"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
+# 		})
+# 	return jsonify({"items": items})
 
 
-@app.post('/api/export/report')
-def export_report():
-	"""Generate discrepancy report CSV from selected records."""
-	try:
-		data = request.get_json(force=True) or {}
-		record_ids = data.get('recordIds', [])
-		date_from = data.get('dateFrom')
-		date_to = data.get('dateTo')
-
-		query = {}
-		if record_ids:
-			query['_id'] = {'$in': [ObjectId(rid) for rid in record_ids]}
-		if date_from or date_to:
-			date_q = {}
-			if date_from:
-				date_q['$gte'] = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-			if date_to:
-				date_q['$lte'] = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-			if date_q:
-				query['createdAt'] = date_q
-
-		records = list(verifications.find(query).sort("createdAt", DESCENDING))
-		if not records:
-			return jsonify({"error": "no records found"}), 404
-
-		csv_content = generate_csv_from_records(records, export_type="report")
-		if not csv_content:
-			return jsonify({"error": "no discrepancies found"}), 400
-
-		exports.insert_one({
-			"type": "discrepancy_report",
-			"recordCount": len(records),
-			"createdAt": datetime.now(timezone.utc),
-			"query": query
-		})
-
-		logger.info("Report export generated: %d records", len(records))
-		return jsonify({"csv": csv_content, "filename": f"discrepancy_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"}), 200
-	except Exception as e:
-		logger.exception("Export report error: %s", e)
-		return jsonify({"error": "export_failed"}), 500
+# @app.get('/api/records/<rid>')
+# def record_detail(rid: str):
+# 	try:
+# 		obj_id = ObjectId(rid)
+# 	except Exception:
+# 		return jsonify({"error": "invalid id"}), 400
+# 	d = verifications.find_one({"_id": obj_id})
+# 	if not d:
+# 		return jsonify({"error": "not found"}), 404
+# 	return jsonify({
+# 		"id": str(d["_id"]),
+# 		"invoice": d.get("invoice"),
+# 		"po": d.get("po"),
+# 		"result": d.get("result"),
+# 		"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
+# 	})
 
 
-@app.get('/api/export/history')
-def export_history():
-	"""Get export history."""
-	try:
-		limit = int(request.args.get('limit', '20'))
-		items = []
-		for d in exports.find().sort("createdAt", DESCENDING).limit(limit):
-			items.append({
-				"id": str(d["_id"]),
-				"type": d.get("type"),
-				"recordCount": d.get("recordCount", 0),
-				"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
-			})
-		return jsonify({"items": items}), 200
-	except Exception as e:
-		logger.exception("Export history error: %s", e)
-		return jsonify({"error": "history_failed"}), 500
+# @app.post('/api/export/csv')
+# def export_csv():
+# 	"""Generate corrected invoice CSV from selected records."""
+# 	try:
+# 		data = request.get_json(force=True) or {}
+# 		record_ids = data.get('recordIds', [])
+# 		date_from = data.get('dateFrom')
+# 		date_to = data.get('dateTo')
+# 		status_filter = data.get('status')
+#
+# 		query = {}
+# 		if record_ids:
+# 			query['_id'] = {'$in': [ObjectId(rid) for rid in record_ids]}
+# 		if date_from or date_to:
+# 			date_q = {}
+# 			if date_from:
+# 				date_q['$gte'] = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+# 			if date_to:
+# 				date_q['$lte'] = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+# 			if date_q:
+# 				query['createdAt'] = date_q
+# 		if status_filter:
+# 			query['result.status'] = status_filter
+#
+# 		records = list(verifications.find(query).sort("createdAt", DESCENDING))
+# 		if not records:
+# 			return jsonify({"error": "no records found"}), 404
+#
+# 		csv_content = generate_csv_from_records(records, export_type="corrected")
+# 		if not csv_content:
+# 			return jsonify({"error": "no data to export"}), 400
+#
+# 		exports.insert_one({
+# 			"type": "corrected_invoice",
+# 			"recordCount": len(records),
+# 			"createdAt": datetime.now(timezone.utc),
+# 			"query": query
+# 		})
+#
+# 		logger.info("CSV export generated: %d records", len(records))
+# 		return jsonify({"csv": csv_content, "filename": f"corrected_invoice_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"}), 200
+# 	except Exception as e:
+# 		logger.exception("Export CSV error: %s", e)
+# 		return jsonify({"error": "export_failed"}), 500
 
 
-@app.post('/api/admin/records/clear')
-def clear_records():
-	if request.headers.get('X-Admin-Key') != os.getenv('ADMIN_KEY', 'dev'):
-		return jsonify({"error": "unauthorized"}), 401
-	res = verifications.delete_many({})
-	return jsonify({"deleted": res.deleted_count})
+# @app.post('/api/export/report')
+# def export_report():
+# 	"""Generate discrepancy report CSV from selected records."""
+# 	try:
+# 		data = request.get_json(force=True) or {}
+# 		record_ids = data.get('recordIds', [])
+# 		date_from = data.get('dateFrom')
+# 		date_to = data.get('dateTo')
+#
+# 		query = {}
+# 		if record_ids:
+# 			query['_id'] = {'$in': [ObjectId(rid) for rid in record_ids]}
+# 		if date_from or date_to:
+# 			date_q = {}
+# 			if date_from:
+# 				date_q['$gte'] = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+# 			if date_to:
+# 				date_q['$lte'] = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+# 			if date_q:
+# 				query['createdAt'] = date_q
+#
+# 		records = list(verifications.find(query).sort("createdAt", DESCENDING))
+# 		if not records:
+# 			return jsonify({"error": "no records found"}), 404
+#
+# 		csv_content = generate_csv_from_records(records, export_type="report")
+# 		if not csv_content:
+# 			return jsonify({"error": "no discrepancies found"}), 400
+#
+# 		exports.insert_one({
+# 			"type": "discrepancy_report",
+# 			"recordCount": len(records),
+# 			"createdAt": datetime.now(timezone.utc),
+# 			"query": query
+# 		})
+#
+# 		logger.info("Report export generated: %d records", len(records))
+# 		return jsonify({"csv": csv_content, "filename": f"discrepancy_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"}), 200
+# 	except Exception as e:
+# 		logger.exception("Export report error: %s", e)
+# 		return jsonify({"error": "export_failed"}), 500
+
+
+# @app.get('/api/export/history')
+# def export_history():
+# 	"""Get export history."""
+# 	try:
+# 		limit = int(request.args.get('limit', '20'))
+# 		items = []
+# 		for d in exports.find().sort("createdAt", DESCENDING).limit(limit):
+# 			items.append({
+# 				"id": str(d["_id"]),
+# 				"type": d.get("type"),
+# 				"recordCount": d.get("recordCount", 0),
+# 				"createdAt": d.get("createdAt").isoformat() if d.get("createdAt") else None,
+# 			})
+# 		return jsonify({"items": items}), 200
+# 	except Exception as e:
+# 		logger.exception("Export history error: %s", e)
+# 		return jsonify({"error": "history_failed"}), 500
+
+
+# @app.post('/api/admin/records/clear')
+# def clear_records():
+# 	if request.headers.get('X-Admin-Key') != os.getenv('ADMIN_KEY', 'dev'):
+# 		return jsonify({"error": "unauthorized"}), 401
+# 	res = verifications.delete_many({})
+# 	return jsonify({"deleted": res.deleted_count})
 
 
 def get_user_id():
-	"""Get user ID from token."""
+	"""Get user ID - Authentication disabled, returns demo user ID."""
+	# Authentication disabled - using demo user
+	# In a real app, you'd get this from a session or token
+	demo_user_id = "demo_user_123"  # Hardcoded demo user
+	
+	# Optional: Try to get from token if provided, but don't require it
 	auth = request.headers.get('Authorization', '')
-	if not auth.startswith('Bearer '):
-		return None
-	token = auth[7:]
-	try:
-		payload = decode_token(token)
-		return payload.get('sub')
-	except:
-		return None
+	if auth and auth.startswith('Bearer '):
+		token = auth.split(' ', 1)[1] if ' ' in auth else auth[7:]
+		if token:
+			try:
+				payload = decode_token(token)
+				user_id = payload.get('sub')
+				if user_id:
+					return user_id
+			except:
+				pass  # Fall through to demo user
+	
+	return demo_user_id
 
 # ==================== EduHub API Endpoints ====================
 
@@ -454,8 +514,9 @@ def get_streak():
 	"""Get user's streak data."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = streaks.find_one({"userId": user_id})
 		if not data:
 			data = {"current": 0, "longest": 0, "lastDate": None}
@@ -473,8 +534,9 @@ def update_streak():
 	"""Update user's streak."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		today = datetime.now(timezone.utc).date().isoformat()
 		data = streaks.find_one({"userId": user_id})
 		if not data:
@@ -509,8 +571,9 @@ def get_resources():
 	"""Get user's resources."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		items = []
 		for r in resources.find({"userId": user_id}).sort("createdAt", DESCENDING):
 			r["id"] = str(r["_id"])
@@ -527,8 +590,9 @@ def create_resource():
 	"""Create a new resource."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		resource = {
 			"userId": user_id,
@@ -552,8 +616,9 @@ def delete_resource(resource_id):
 	"""Delete a resource."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		result = resources.delete_one({"_id": ObjectId(resource_id), "userId": user_id})
 		if result.deleted_count:
 			return jsonify({"success": True}), 200
@@ -567,8 +632,9 @@ def start_focus():
 	"""Start a focus session."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		session = {
 			"userId": user_id,
 			"startTime": datetime.now(timezone.utc),
@@ -586,8 +652,9 @@ def stop_focus():
 	"""Stop a focus session."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		session_id = data.get("sessionId")
 		if not session_id:
@@ -611,8 +678,9 @@ def get_focus_today():
 	"""Get today's total focus time."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 		total = 0
 		for s in focus_sessions.find({
@@ -633,8 +701,9 @@ def get_todos():
 	"""Get user's todos."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		items = []
 		for t in todos.find({"userId": user_id}).sort([("orderIndex", 1), ("createdAt", DESCENDING)]):
 			t["id"] = str(t["_id"])
@@ -657,8 +726,9 @@ def create_todo():
 	"""Create a new todo."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		# Determine next order index
 		last = todos.find_one({"userId": user_id}, sort=[("orderIndex", -1)])
@@ -700,8 +770,9 @@ def update_todo(todo_id):
 	"""Update a todo."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		update_data = {}
 		if "title" in data:
@@ -755,8 +826,9 @@ def delete_todo(todo_id):
 	"""Delete a todo."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		result = todos.delete_one({"_id": ObjectId(todo_id), "userId": user_id})
 		if result.deleted_count:
 			return jsonify({"success": True}), 200
@@ -773,8 +845,9 @@ def reorder_todos():
 	"""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		ordered_ids = data.get("orderedIds", [])
 		# Normalize to ObjectIds where possible
@@ -813,8 +886,9 @@ def get_moods():
 	"""Get user's moods."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		limit = int(request.args.get('limit', '100'))
 		items = []
 		for m in moods.find({"userId": user_id}).sort("date", DESCENDING).limit(limit):
@@ -834,8 +908,9 @@ def create_mood():
 	"""Create a new mood entry."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		data = request.get_json(force=True) or {}
 		mood = {
 			"userId": user_id,
@@ -859,8 +934,9 @@ def delete_mood(mood_id):
 	"""Delete a mood entry."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		result = moods.delete_one({"_id": ObjectId(mood_id), "userId": user_id})
 		if result.deleted_count:
 			return jsonify({"success": True}), 200
@@ -876,8 +952,9 @@ def get_medications():
 	"""Get all medications for the current user."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		limit = int(request.args.get('limit', 100))
 		medication_list = list(medications.find({"userId": user_id}).sort("createdAt", DESCENDING).limit(limit))
@@ -898,8 +975,9 @@ def create_medication():
 	"""Create a new medication entry."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		name = data.get("name", "").strip()
@@ -933,8 +1011,9 @@ def update_medication(medication_id):
 	"""Update an existing medication."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		
@@ -979,8 +1058,9 @@ def delete_medication(medication_id):
 	"""Delete a medication entry."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		result = medications.delete_one({"_id": ObjectId(medication_id), "userId": user_id})
 		if result.deleted_count == 0:
@@ -996,8 +1076,9 @@ def log_medication_taken(medication_id):
 	"""Log that a medication was taken at a specific time."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		taken_at = data.get("takenAt")
@@ -1019,152 +1100,126 @@ def log_medication_taken(medication_id):
 		logger.exception("Log medication error: %s", e)
 		return jsonify({"error": "log_failed"}), 500
 
-# ==================== Opportunities API Endpoints ====================
+# ==================== Opportunities API Endpoints (REMOVED) ====================
+# Opportunities feature has been removed from the app
 
-@app.get('/api/eduhub/opportunities')
-def get_opportunities():
-	"""Get all opportunities for the current user."""
-	try:
-		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
-		
-		limit = int(request.args.get('limit', 100))
-		filter_type = request.args.get('type', 'all')  # all, internship, job, scholarship, etc.
-		
-		query = {"userId": user_id}
-		if filter_type != 'all':
-			query["type"] = filter_type
-		
-		opportunity_list = list(opportunities.find(query).sort("createdAt", DESCENDING).limit(limit))
-		
-		for opp in opportunity_list:
-			opp["id"] = str(opp["_id"])
-			del opp["_id"]
-			if "userId" in opp:
-				del opp["userId"]
-		
-		return jsonify({"items": opportunity_list}), 200
-	except Exception as e:
-		logger.exception("Get opportunities error: %s", e)
-		return jsonify({"error": "fetch_failed"}), 500
+# # All opportunities endpoints commented out - feature removed
+# @app.get('/api/eduhub/opportunities')
+# def get_opportunities():
+# 	"""Get all opportunities for the current user."""
+# 	try:
+# 		user_id = get_user_id()
+# 		limit = int(request.args.get('limit', 100))
+# 		filter_type = request.args.get('type', 'all')
+# 		query = {"userId": user_id}
+# 		if filter_type != 'all':
+# 			query["type"] = filter_type
+# 		opportunity_list = list(opportunities.find(query).sort("createdAt", DESCENDING).limit(limit))
+# 		for opp in opportunity_list:
+# 			opp["id"] = str(opp["_id"])
+# 			del opp["_id"]
+# 			if "userId" in opp:
+# 				del opp["userId"]
+# 		return jsonify({"items": opportunity_list}), 200
+# 	except Exception as e:
+# 		logger.exception("Get opportunities error: %s", e)
+# 		return jsonify({"error": "fetch_failed"}), 500
 
-@app.post('/api/eduhub/opportunities')
-def create_opportunity():
-	"""Create a new opportunity entry."""
-	try:
-		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
-		
-		data = request.get_json(force=True) or {}
-		title = data.get("title", "").strip()
-		if not title:
-			return jsonify({"error": "title_required"}), 400
-		
-		deadline = data.get("deadline")
-		if deadline and isinstance(deadline, str):
-			try:
-				deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
-			except:
-				deadline = None
-		
-		opportunity_doc = {
-			"userId": user_id,
-			"title": title,
-			"company": data.get("company", ""),
-			"type": data.get("type", "internship"),  # internship, job, scholarship, competition, etc.
-			"location": data.get("location", ""),
-			"description": data.get("description", ""),
-			"link": data.get("link", ""),
-			"deadline": deadline,
-			"status": data.get("status", "open"),  # open, applied, rejected, accepted
-			"createdAt": datetime.now(timezone.utc),
-			"updatedAt": datetime.now(timezone.utc)
-		}
-		
-		result = opportunities.insert_one(opportunity_doc)
-		opportunity_doc["id"] = str(result.inserted_id)
-		del opportunity_doc["_id"]
-		del opportunity_doc["userId"]
-		
-		return jsonify(opportunity_doc), 201
-	except Exception as e:
-		logger.exception("Create opportunity error: %s", e)
-		return jsonify({"error": "create_failed"}), 500
+# @app.post('/api/eduhub/opportunities')
+# def create_opportunity():
+# 	"""Create a new opportunity entry."""
+# 	try:
+# 		user_id = get_user_id()
+# 		data = request.get_json(force=True) or {}
+# 		title = data.get("title", "").strip()
+# 		if not title:
+# 			return jsonify({"error": "title_required"}), 400
+# 		deadline = data.get("deadline")
+# 		if deadline and isinstance(deadline, str):
+# 			try:
+# 				deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+# 			except:
+# 				deadline = None
+# 		opportunity_doc = {
+# 			"userId": user_id,
+# 			"title": title,
+# 			"company": data.get("company", ""),
+# 			"type": data.get("type", "internship"),
+# 			"location": data.get("location", ""),
+# 			"description": data.get("description", ""),
+# 			"link": data.get("link", ""),
+# 			"deadline": deadline,
+# 			"status": data.get("status", "open"),
+# 			"createdAt": datetime.now(timezone.utc),
+# 			"updatedAt": datetime.now(timezone.utc)
+# 		}
+# 		result = opportunities.insert_one(opportunity_doc)
+# 		opportunity_doc["id"] = str(result.inserted_id)
+# 		del opportunity_doc["_id"]
+# 		del opportunity_doc["userId"]
+# 		return jsonify(opportunity_doc), 201
+# 	except Exception as e:
+# 		logger.exception("Create opportunity error: %s", e)
+# 		return jsonify({"error": "create_failed"}), 500
 
-@app.put('/api/eduhub/opportunities/<opportunity_id>')
-def update_opportunity(opportunity_id):
-	"""Update an existing opportunity."""
-	try:
-		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
-		
-		data = request.get_json(force=True) or {}
-		
-		update_fields = {}
-		if "title" in data:
-			update_fields["title"] = data["title"].strip()
-		if "company" in data:
-			update_fields["company"] = data["company"]
-		if "type" in data:
-			update_fields["type"] = data["type"]
-		if "location" in data:
-			update_fields["location"] = data["location"]
-		if "description" in data:
-			update_fields["description"] = data["description"]
-		if "link" in data:
-			update_fields["link"] = data["link"]
-		if "status" in data:
-			update_fields["status"] = data["status"]
-		if "deadline" in data:
-			deadline = data["deadline"]
-			if deadline and isinstance(deadline, str):
-				try:
-					deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
-				except:
-					deadline = None
-			update_fields["deadline"] = deadline
-		
-		update_fields["updatedAt"] = datetime.now(timezone.utc)
-		
-		result = opportunities.update_one(
-			{"_id": ObjectId(opportunity_id), "userId": user_id},
-			{"$set": update_fields}
-		)
-		
-		if result.matched_count == 0:
-			return jsonify({"error": "opportunity_not_found"}), 404
-		
-		# Return updated opportunity
-		updated = opportunities.find_one({"_id": ObjectId(opportunity_id)})
-		if updated:
-			updated["id"] = str(updated["_id"])
-			del updated["_id"]
-			del updated["userId"]
-		
-		return jsonify(updated), 200
-	except Exception as e:
-		logger.exception("Update opportunity error: %s", e)
-		return jsonify({"error": "update_failed"}), 500
+# @app.put('/api/eduhub/opportunities/<opportunity_id>')
+# def update_opportunity(opportunity_id):
+# 	"""Update an existing opportunity."""
+# 	try:
+# 		user_id = get_user_id()
+# 		data = request.get_json(force=True) or {}
+# 		update_fields = {}
+# 		if "title" in data:
+# 			update_fields["title"] = data["title"].strip()
+# 		if "company" in data:
+# 			update_fields["company"] = data["company"]
+# 		if "type" in data:
+# 			update_fields["type"] = data["type"]
+# 		if "location" in data:
+# 			update_fields["location"] = data["location"]
+# 		if "description" in data:
+# 			update_fields["description"] = data["description"]
+# 		if "link" in data:
+# 			update_fields["link"] = data["link"]
+# 		if "status" in data:
+# 			update_fields["status"] = data["status"]
+# 		if "deadline" in data:
+# 			deadline = data["deadline"]
+# 			if deadline and isinstance(deadline, str):
+# 				try:
+# 					deadline = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+# 				except:
+# 					deadline = None
+# 			update_fields["deadline"] = deadline
+# 		update_fields["updatedAt"] = datetime.now(timezone.utc)
+# 		result = opportunities.update_one(
+# 			{"_id": ObjectId(opportunity_id), "userId": user_id},
+# 			{"$set": update_fields}
+# 		)
+# 		if result.matched_count == 0:
+# 			return jsonify({"error": "opportunity_not_found"}), 404
+# 		updated = opportunities.find_one({"_id": ObjectId(opportunity_id)})
+# 		if updated:
+# 			updated["id"] = str(updated["_id"])
+# 			del updated["_id"]
+# 			del updated["userId"]
+# 		return jsonify(updated), 200
+# 	except Exception as e:
+# 		logger.exception("Update opportunity error: %s", e)
+# 		return jsonify({"error": "update_failed"}), 500
 
-@app.delete('/api/eduhub/opportunities/<opportunity_id>')
-def delete_opportunity(opportunity_id):
-	"""Delete an opportunity entry."""
-	try:
-		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
-		
-		result = opportunities.delete_one({"_id": ObjectId(opportunity_id), "userId": user_id})
-		if result.deleted_count == 0:
-			return jsonify({"error": "opportunity_not_found"}), 404
-		
-		return jsonify({"success": True}), 200
-	except Exception as e:
-		logger.exception("Delete opportunity error: %s", e)
-		return jsonify({"error": "delete_failed"}), 500
+# @app.delete('/api/eduhub/opportunities/<opportunity_id>')
+# def delete_opportunity(opportunity_id):
+# 	"""Delete an opportunity entry."""
+# 	try:
+# 		user_id = get_user_id()
+# 		result = opportunities.delete_one({"_id": ObjectId(opportunity_id), "userId": user_id})
+# 		if result.deleted_count == 0:
+# 			return jsonify({"error": "opportunity_not_found"}), 404
+# 		return jsonify({"success": True}), 200
+# 	except Exception as e:
+# 		logger.exception("Delete opportunity error: %s", e)
+# 		return jsonify({"error": "delete_failed"}), 500
 
 # ==================== Settings API Endpoints ====================
 
@@ -1173,8 +1228,9 @@ def get_settings():
 	"""Get user settings."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		# Check if settings exist
 		settings_collection = db['settings']
@@ -1213,8 +1269,9 @@ def update_settings():
 	"""Update user settings."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		
@@ -1248,8 +1305,9 @@ def ai_advisor():
 	"""Gemini-powered AI advisor that analyzes mood and tasks to suggest optimal work."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		if not gemini_model:
 			return jsonify({"error": "AI service unavailable"}), 503
@@ -1300,8 +1358,8 @@ def ai_advisor():
 		else:
 			tasks_context = "No pending tasks."
 		
-		# Build prompt for Gemini
-		prompt = f"""You are an AI productivity and mood companion. Analyze the user's current state and provide personalized task recommendations.
+		# Build prompt for Gemini - make it more natural
+		prompt = f"""You're helping someone with their productivity. Give practical, human advice based on their current situation.
 
 Context:
 - {mood_context}
@@ -1324,8 +1382,26 @@ Format your response as a JSON object with these keys:
 
 Be concise, empathetic, and actionable. Consider mood-energy-task matching."""
 		
-		response = gemini_model.generate_content(prompt)
-		response_text = response.text.strip()
+		try:
+			response = gemini_model.generate_content(prompt)
+			response_text = response.text.strip()
+		except Exception as gen_error:
+			logger.error(f"Gemini API error in advisor: {gen_error}")
+			# Return fallback response
+			advisor_data = {
+				"analysis": "Unable to analyze at the moment. Please try again.",
+				"recommendedTasks": [],
+				"motivationalMessage": "Stay focused and take breaks when needed!",
+				"suggestBreak": False,
+				"breakReason": None
+			}
+			return jsonify({
+				"currentMood": current_mood.get("mood") if current_mood else None,
+				"timeOfDay": time_of_day,
+				"focusTimeToday": total_focus_today,
+				"pendingTasksCount": len(pending_todos),
+				"advisor": advisor_data
+			}), 200
 		
 		# Try to extract JSON from response
 		try:
@@ -1362,11 +1438,13 @@ def ai_chat():
 	"""Chat with Gemini AI about productivity and mood."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		if not gemini_model:
-			return jsonify({"error": "AI service unavailable"}), 503
+			logger.warning("Gemini model not initialized - check GEMINI_API_KEY")
+			return jsonify({"error": "AI service unavailable", "message": "Gemini AI is not initialized. Please check GEMINI_API_KEY in .env file."}), 503
 		
 		data = request.get_json(force=True) or {}
 		message = data.get("message", "")
@@ -1375,8 +1453,17 @@ def ai_chat():
 		if not message:
 			return jsonify({"error": "message required"}), 400
 		
-		# Build context-aware prompt
-		context = "You are a helpful AI productivity and mood companion. Help the user with their questions about productivity, task management, mood tracking, and well-being. Be empathetic, practical, and encouraging."
+		# Build context-aware prompt - make responses more human and natural
+		context = """You are a helpful and friendly productivity companion. When responding:
+- Write naturally, as if you're a real person having a conversation
+- Use simple, clear language - avoid overly formal or robotic phrases
+- Be conversational and warm, but not overly casual
+- Keep responses concise and to the point
+- Use natural transitions and avoid repetitive phrases
+- If explaining something technical, break it down simply
+- Show genuine interest in helping, but don't overdo enthusiasm
+- Avoid phrases like "I understand", "I'm here to help" - just help directly
+- Write in a way that feels human, not like an AI assistant"""
 		
 		# Add recent context if available
 		recent_mood = moods.find_one({"userId": user_id}, sort=[("date", DESCENDING)])
@@ -1396,8 +1483,48 @@ def ai_chat():
 		
 		full_prompt += f"User: {message}\nAssistant:"
 		
-		response = gemini_model.generate_content(full_prompt)
-		response_text = response.text.strip()
+		try:
+			logger.info(f"Calling Gemini API with prompt length: {len(full_prompt)}")
+			logger.debug(f"Prompt preview: {full_prompt[:200]}...")
+			
+			# Generate content
+			response = None
+			try:
+				response = gemini_model.generate_content(
+					full_prompt,
+					generation_config={
+						"temperature": 0.9,  # Higher temperature for more natural responses
+						"top_p": 0.95,
+						"top_k": 40,
+					}
+				)
+			except Exception as api_err:
+				logger.error(f"Gemini generate_content error: {api_err}")
+				raise api_err
+			
+			# Extract response text
+			if hasattr(response, 'text') and response.text:
+				response_text = response.text.strip()
+			elif hasattr(response, 'candidates') and response.candidates:
+				# Try to get text from candidates
+				candidate = response.candidates[0]
+				if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+					response_text = candidate.content.parts[0].text.strip()
+				else:
+					response_text = "I received an unexpected response format from the AI."
+			else:
+				response_text = "I received an empty response from the AI."
+			
+			logger.info(f"Gemini API response received (length: {len(response_text)})")
+		except Exception as gen_error:
+			logger.exception(f"Gemini API error: {gen_error}")
+			error_msg = str(gen_error)
+			if "API key" in error_msg or "authentication" in error_msg.lower():
+				response_text = "AI service authentication failed. Please check the API key configuration."
+			elif "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+				response_text = "AI service rate limit exceeded. Please try again later."
+			else:
+				response_text = f"I apologize, but I'm having trouble processing your request. Error: {error_msg[:100]}"
 		
 		return jsonify({
 			"response": response_text,
@@ -1405,7 +1532,7 @@ def ai_chat():
 		}), 200
 	except Exception as e:
 		logger.exception("AI chat error: %s", e)
-		return jsonify({"error": "ai_service_failed"}), 500
+		return jsonify({"error": "ai_service_failed", "message": str(e)}), 500
 
 # ==================== ML Features API Endpoints ====================
 
@@ -1414,8 +1541,9 @@ def ml_recommendations():
 	"""Get ML-powered recommendations for books/playlists."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		item_type = data.get("type", "book")  # "book" or "playlist"
@@ -1478,8 +1606,9 @@ def ml_predict_task_priority():
 	"""Predict priority for a task using ML."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		task = data.get("task", {})
@@ -1543,8 +1672,9 @@ def ml_predict_mood():
 	"""Predict next mood based on patterns."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		# Get user's history
 		mood_history = list(moods.find({"userId": user_id}).sort("date", DESCENDING).limit(30))
@@ -1628,8 +1758,9 @@ def ml_classify_note():
 	"""Classify a note by subject using SVM."""
 	try:
 		user_id = get_user_id()
-		if not user_id:
-			return jsonify({"error": "unauthorized"}), 401
+		# Authentication disabled - user_id always returns demo_user_123
+		# if not user_id:
+		# 	return jsonify({"error": "unauthorized"}), 401
 		
 		data = request.get_json(force=True) or {}
 		note = data.get("note", {})
@@ -1691,4 +1822,7 @@ def health():
 
 
 if __name__ == '__main__':
-	app.run(host='0.0.0.0', port=int(os.getenv('PORT', '5000')), debug=True)
+	# Disable debug mode on Windows to avoid socket errors
+	import sys
+	use_debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true' and sys.platform != 'win32'
+	app.run(host='0.0.0.0', port=int(os.getenv('PORT', '5000')), debug=use_debug, use_reloader=use_debug)

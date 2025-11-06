@@ -335,7 +335,7 @@ export default function Dashboard() {
     <Page>
       <section className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Scrum Dashboard</h1>
+          <h1 className="text-3xl font-bold mb-2 text-blue-400">Scrum Dashboard</h1>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <p className="text-slate-400">Track your tasks, reminders, and progress</p>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5">

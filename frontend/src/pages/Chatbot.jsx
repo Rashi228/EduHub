@@ -52,14 +52,28 @@ export default function Chatbot() {
   }
 
   async function callAI(userMessage) {
-    const history = messages.slice(-6).map(m => ({
-      role: m.sender === 'user' ? 'user' : 'assistant',
-      content: m.text
-    }))
-    const styleCue = personalities[personality]?.style || ''
-    const composedMessage = styleCue ? `${styleCue}\n\nQuestion: ${userMessage}` : userMessage
-    const res = await EduHubApi.chatWithAI(composedMessage, history)
-    return res.response || 'Sorry, I could not generate a response.'
+    try {
+      const history = messages.slice(-6).map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }))
+      const styleCue = personalities[personality]?.style || ''
+      const composedMessage = styleCue ? `${styleCue}\n\nQuestion: ${userMessage}` : userMessage
+      
+      console.log('Calling AI with message:', composedMessage.substring(0, 100))
+      const res = await EduHubApi.chatWithAI(composedMessage, history)
+      console.log('AI response received:', res)
+      
+      if (!res || !res.response) {
+        console.error('Invalid response from API:', res)
+        return 'Sorry, I received an invalid response from the AI service.'
+      }
+      
+      return res.response
+    } catch (error) {
+      console.error('Error calling AI:', error)
+      throw error
+    }
   }
 
   function handleSend() {
@@ -79,7 +93,14 @@ export default function Chatbot() {
   ;(async () => {
     try {
       setLoading(true)
+      console.log('Starting AI call...')
       const aiText = await callAI(userMessage.text)
+      console.log('AI text received:', aiText)
+      
+      if (!aiText || aiText.trim() === '') {
+        throw new Error('Empty response from AI')
+      }
+      
       const botMessage = {
         id: Date.now() + 1,
         text: aiText,
@@ -89,9 +110,11 @@ export default function Chatbot() {
       }
       setMessages(prev => [...prev, botMessage])
     } catch (e) {
+      console.error('Error in handleSend:', e)
+      const errorMessage = e.message || 'Unknown error occurred'
       const botMessage = {
         id: Date.now() + 1,
-        text: 'Sorry, I had trouble reaching the AI service. Please try again.',
+        text: `Sorry, I had trouble reaching the AI service. Error: ${errorMessage}. Please check the browser console and backend logs for more details.`,
         sender: 'bot',
         timestamp: new Date(),
         personality: personality
@@ -99,6 +122,7 @@ export default function Chatbot() {
       setMessages(prev => [...prev, botMessage])
     } finally {
       setLoading(false)
+      console.log('AI call completed')
     }
   })()
   }
@@ -107,7 +131,7 @@ export default function Chatbot() {
     <Page>
       <section className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">AI Chatbot 💬</h1>
+          <h1 className="text-3xl font-bold mb-2 text-blue-400">AI Chatbot 💬</h1>
           <p className="text-slate-400">Get explanations in your preferred style</p>
         </div>
 
@@ -120,8 +144,8 @@ export default function Chatbot() {
                 onClick={() => setPersonality(key)}
                 className={`p-4 rounded-lg border-2 transition ${
                   personality === key
-                    ? 'border-purple-500 bg-purple-500/20'
-                    : 'border-white/10 bg-white/5 hover:border-white/20'
+                    ? 'border-blue-500 bg-blue-600/20'
+                    : 'border-slate-600 bg-slate-700 hover:border-slate-500'
                 }`}
               >
                 <div className="text-3xl mb-2">{p.icon}</div>
@@ -130,12 +154,12 @@ export default function Chatbot() {
             ))}
           </div>
           <p className="text-sm text-slate-400 mt-3">
-            Current: <span className="text-purple-400">{personalities[personality].name}</span> - {personalities[personality].description}
+            Current: <span className="text-blue-400">{personalities[personality].name}</span> - {personalities[personality].description}
           </p>
         </div>
 
-        <div className="relative rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500/35 to-purple-500/35 mb-6">
-          <div className="rounded-[14px] ring-1 ring-white/10 bg-[#0f1530]/80 p-6 h-[500px] flex flex-col">
+        <div className="relative rounded-2xl border border-slate-600 mb-6">
+          <div className="rounded-xl bg-slate-800 p-6 h-[500px] flex flex-col">
             <div className="flex-1 overflow-y-auto mb-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center text-slate-400 py-12">
@@ -151,10 +175,10 @@ export default function Chatbot() {
                     className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[75%] rounded-2xl p-4 ${
+                      className={`max-w-[75%] rounded-lg p-4 ${
                         msg.sender === 'user'
-                          ? 'bg-gradient-to-r from-purple-500 to-pink-500'
-                          : 'bg-white/10'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-100'
                       }`}
                     >
                       <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
@@ -178,11 +202,11 @@ export default function Chatbot() {
                 onChange={e => setInput(e.target.value)}
                 onKeyPress={e => e.key === 'Enter' && handleSend()}
                 placeholder="Ask me anything..."
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
                 onClick={handleSend}
-                className="px-6 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium hover:from-indigo-400 hover:to-purple-400 transition"
+                className="px-6 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition"
               >
                 Send
               </button>
@@ -190,8 +214,8 @@ export default function Chatbot() {
           </div>
         </div>
 
-        <div className="relative rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500/35 to-purple-500/35">
-          <div className="rounded-[14px] ring-1 ring-white/10 bg-[#0f1530]/80 p-6">
+        <div className="relative rounded-2xl border border-slate-600">
+          <div className="rounded-xl bg-slate-800 p-6">
             <h3 className="text-lg font-semibold mb-3">Try asking:</h3>
             <div className="grid md:grid-cols-2 gap-2">
               {[
@@ -206,7 +230,7 @@ export default function Chatbot() {
                     setInput(question)
                     setTimeout(() => handleSend(), 100)
                   }}
-                  className="text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 transition text-sm"
+                  className="text-left p-3 rounded-lg bg-slate-700 hover:bg-slate-600 transition text-sm text-slate-200"
                 >
                   {question}
                 </button>

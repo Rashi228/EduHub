@@ -10,6 +10,18 @@ export async function apiFetch(path, { method = 'GET', body, token } = {}) {
     body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined,
   })
   const data = await res.json().catch(() => ({}))
+  
+  // Authentication disabled - no 401 redirect needed
+  // if (res.status === 401 && token) {
+  //   // Clear invalid token
+  //   localStorage.removeItem('auth_token')
+  //   localStorage.removeItem('auth_user')
+  //   // Redirect to login if we're not already there
+  //   if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+  //     window.location.href = '/login'
+  //   }
+  // }
+  
   if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status, data })
   return data
 }
@@ -26,37 +38,12 @@ export const AuthApi = {
   },
 }
 
-export const DataApi = {
-  stats() {
-    return apiFetch('/api/stats')
-  },
-  records({ limit = 20 } = {}) {
-    const p = new URLSearchParams({ limit: String(limit) }).toString()
-    return apiFetch(`/api/records?${p}`)
-  },
-  record(id) {
-    return apiFetch(`/api/records/${id}`)
-  },
-  verify({ invoiceFile, poFile }) {
-    const fd = new FormData()
-    fd.append('invoice', invoiceFile)
-    fd.append('po', poFile)
-    return apiFetch('/api/verify', { method: 'POST', body: fd })
-  },
-  exportCsv({ recordIds, dateFrom, dateTo, status }) {
-    return apiFetch('/api/export/csv', { method: 'POST', body: { recordIds, dateFrom, dateTo, status } })
-  },
-  exportReport({ recordIds, dateFrom, dateTo }) {
-    return apiFetch('/api/export/report', { method: 'POST', body: { recordIds, dateFrom, dateTo } })
-  },
-  exportHistory({ limit = 20 } = {}) {
-    const p = new URLSearchParams({ limit: String(limit) }).toString()
-    return apiFetch(`/api/export/history?${p}`)
-  }
-}
+// InvoSync-related APIs removed - this is EduHub project
 
 function getToken() {
-  return localStorage.getItem('auth_token')
+  // Authentication disabled - return empty token (backend will use demo user)
+  return null
+  // return localStorage.getItem('auth_token')
 }
 
 export const EduHubApi = {
@@ -148,21 +135,21 @@ export const EduHubApi = {
       token: getToken() 
     })
   },
-  // Opportunities
-  async getOpportunities(filter = 'all', limit = 100) {
-    const p = new URLSearchParams({ type: filter, limit: String(limit) }).toString()
-    const data = await apiFetch(`/api/eduhub/opportunities?${p}`, { token: getToken() })
-    return data.items || []
-  },
-  async createOpportunity(opportunity) {
-    return apiFetch('/api/eduhub/opportunities', { method: 'POST', body: opportunity, token: getToken() })
-  },
-  async updateOpportunity(opportunityId, updates) {
-    return apiFetch(`/api/eduhub/opportunities/${opportunityId}`, { method: 'PUT', body: updates, token: getToken() })
-  },
-  async deleteOpportunity(opportunityId) {
-    return apiFetch(`/api/eduhub/opportunities/${opportunityId}`, { method: 'DELETE', token: getToken() })
-  },
+  // Opportunities - REMOVED
+  // async getOpportunities(filter = 'all', limit = 100) {
+  //   const p = new URLSearchParams({ type: filter, limit: String(limit) }).toString()
+  //   const data = await apiFetch(`/api/eduhub/opportunities?${p}`, { token: getToken() })
+  //   return data.items || []
+  // },
+  // async createOpportunity(opportunity) {
+  //   return apiFetch('/api/eduhub/opportunities', { method: 'POST', body: opportunity, token: getToken() })
+  // },
+  // async updateOpportunity(opportunityId, updates) {
+  //   return apiFetch(`/api/eduhub/opportunities/${opportunityId}`, { method: 'PUT', body: updates, token: getToken() })
+  // },
+  // async deleteOpportunity(opportunityId) {
+  //   return apiFetch(`/api/eduhub/opportunities/${opportunityId}`, { method: 'DELETE', token: getToken() })
+  // },
   // Settings
   async getSettings() {
     return apiFetch('/api/eduhub/settings', { token: getToken() })

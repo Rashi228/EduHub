@@ -1,103 +1,68 @@
-# InvoSync
+# EduHub - AI-Powered Personal Productivity & Mood Companion
 
-InvoSync is an AI-powered invoice and purchase order reconciliation platform that automates document verification, discrepancy detection, and data export. The system uses OCR technology to extract data from invoices and purchase orders, compares them for mismatches, and provides automated reconciliation workflows.
+EduHub is an intelligent productivity platform that combines task management, mood tracking, focus time analytics, and AI-powered recommendations to help you optimize your daily workflow and wellbeing.
 
 ## Overview
 
-InvoSync streamlines the accounts payable process by automatically extracting data from invoices and purchase orders, comparing them for discrepancies, and generating exportable CSV reports. The platform reduces manual verification time and minimizes human error in financial document processing.
+EduHub uses **Gemini AI** and **Machine Learning** to provide personalized productivity insights, task prioritization, mood pattern recognition, and intelligent recommendations. The platform learns from your habits and adapts to help you achieve your goals.
 
 ## Features
 
 ### Core Functionality
 
-- Dual Document Upload: Upload both purchase orders and invoices simultaneously
-- OCR-Based Data Extraction: Automatic extraction of vendor names, invoice numbers, PO numbers, dates, amounts, and line items
-- Intelligent Comparison Engine: Automated reconciliation with fuzzy matching for vendor names and item descriptions
-- Discrepancy Detection: Identifies mismatches in quantities, prices, totals, and vendor information
-- Status Classification: Automatically categorizes records as matched, mismatch, or partial
-- Manual Review Interface: Side-by-side comparison view for reviewing extracted data
+- **Task Management**: Smart task prioritization with ML-powered priority prediction
+- **Mood Tracking**: Track your mood patterns with AI-powered predictions
+- **Focus Time**: Pomodoro-style focus sessions with analytics
+- **Medication Tracker**: Manage medications with reminders
+- **Opportunities**: Track internships, jobs, scholarships, and more
+- **Resources**: Books and playlists with ML-based recommendations
+- **Streaks**: Build and maintain productive habits
+- **AI Advisor**: Get personalized productivity recommendations based on your mood and tasks
+- **AI Chatbot**: Chat with Gemini AI about productivity and mood
 
-### Export and Reporting
+### AI & ML Features
 
-- CSV Export: Generate corrected invoice CSV files with validated data
-- Discrepancy Reports: Export detailed mismatch reports for auditing
-- Export History: Track all past exports with metadata
-- Scheduled Exports: Configure automatic exports using CRON expressions
-- Date Range Filtering: Filter exports by specific date ranges
-- Status-Based Filtering: Export only matched, mismatched, or all records
+- **Task Priority Prediction**: XGBoost model predicts task priority (high/medium/low)
+- **Mood Pattern Recognition**: XGBoost + PCA model predicts mood based on patterns
+- **Recommendations**: KNN collaborative filtering for books/playlists
+- **Note Classification**: SVM classifier for automatic note categorization
+- **Gemini AI Integration**: Context-aware AI advisor and chatbot
 
-### User Management
+### Smart Features
 
-- Secure Authentication: JWT-based login and signup system
-- User Profiles: Store and manage user account information
-- Session Management: Persistent authentication tokens
-
-### Dashboard and Analytics
-
-- Real-Time Statistics: View matched records, discrepancies, and pending verifications
-- Recent Activity: Quick view of latest processed documents
-- KPI Metrics: Track key performance indicators
-- Quick Actions: Fast access to common operations
+- **Auto-Priority**: ML automatically predicts task priority as you type
+- **Mood Insights**: AI analyzes patterns between mood, medication, tasks, and focus time
+- **Personalized Recommendations**: Get book/playlist suggestions based on similar users
+- **Focus Analytics**: Track your most productive times and patterns
 
 ## Technology Stack
 
 ### Frontend
-
 - React 18.3.1
 - React Router DOM 6.26.2
 - Vite 5.4.8
-- Tailwind CSS (CDN)
+- Tailwind CSS
 - Framer Motion 11.8.0
-- TanStack Query 5.51.23
-- React Hook Form 7.53.0
-- Axios 1.7.7
 
 ### Backend
-
 - Flask 3.0.3
 - Python 3.12+
 - MongoDB (via PyMongo 4.8.0)
-- PaddleOCR / Tesseract OCR (pytesseract 0.3.13)
-- RapidFuzz 3.14.1
-- Pandas 2.3.3
-- PyJWT 2.9.0
-- Passlib 1.7.4
+- Google Generative AI (Gemini)
+- Scikit-learn 1.5.2
+- XGBoost 2.1.3
 
-### OCR and Image Processing
-
-- PaddleOCR 2.7.3 (optional)
-- pytesseract 0.3.13
-- pdf2image 1.17.0
-- PyMuPDF 1.26.5
-- Pillow 10.4.0
-- OpenCV 4.6.0.66
+### ML Models
+- **XGBoost**: Task prioritization and mood prediction
+- **PCA**: Feature reduction for mood prediction (14 features → 3 components)
+- **KNN**: Collaborative filtering for recommendations
+- **SVM**: Text classification for notes
 
 ## Prerequisites
-
-### System Requirements
 
 - Python 3.12 or higher
 - Node.js 18 or higher
 - MongoDB (local or remote instance)
-- Tesseract OCR (for Windows, macOS, or Linux)
-
-### Installing Tesseract OCR
-
-**Windows:**
-winget install -e --id UB-Mannheim.TesseractOCR
-
-
-**macOS:**
-brew install tesseract
-
-
-**Linux (Ubuntu/Debian):**
-sudo apt-get install tesseract-ocr
-
-
-**After installation, verify:**
-tesseract --version
-
 
 ## Installation
 
@@ -121,18 +86,12 @@ pip install -r requirements.txt
 
 4. Create a `.env` file in the backend directory:
 ```env
-MONGO_URI=mongodb://localhost:27017/invosync
+MONGO_URI=mongodb://localhost:27017/eduhub
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXP_MIN=60
 PORT=5000
 CORS_ORIGIN=http://localhost:5173
-UPLOAD_DIR=./uploads
-ADMIN_KEY=dev
-```
-
-5. Create the uploads directory:
-```bash
-mkdir uploads
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 ### Frontend Setup
@@ -176,142 +135,79 @@ npm run dev
 
 The frontend will start on `http://localhost:5173`
 
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/signup` - Create new account
+- `POST /api/auth/login` - Login
+- `GET /api/auth/me` - Get current user
+
+### EduHub Features
+- `GET /api/eduhub/streak` - Get streak data
+- `POST /api/eduhub/streak/update` - Update streak
+- `GET /api/eduhub/resources` - Get resources
+- `POST /api/eduhub/resources` - Create resource
+- `DELETE /api/eduhub/resources/<id>` - Delete resource
+- `POST /api/eduhub/focus/start` - Start focus session
+- `POST /api/eduhub/focus/stop` - Stop focus session
+- `GET /api/eduhub/focus/today` - Get today's focus time
+- `GET /api/eduhub/todos` - Get todos
+- `POST /api/eduhub/todos` - Create todo
+- `PUT /api/eduhub/todos/<id>` - Update todo
+- `DELETE /api/eduhub/todos/<id>` - Delete todo
+- `POST /api/eduhub/todos/reorder` - Reorder todos
+- `GET /api/eduhub/moods` - Get moods
+- `POST /api/eduhub/moods` - Create mood
+- `DELETE /api/eduhub/moods/<id>` - Delete mood
+- `GET /api/eduhub/medications` - Get medications
+- `POST /api/eduhub/medications` - Create medication
+- `PUT /api/eduhub/medications/<id>` - Update medication
+- `DELETE /api/eduhub/medications/<id>` - Delete medication
+- `POST /api/eduhub/medications/<id>/log` - Log medication taken
+- `GET /api/eduhub/opportunities` - Get opportunities
+- `POST /api/eduhub/opportunities` - Create opportunity
+- `PUT /api/eduhub/opportunities/<id>` - Update opportunity
+- `DELETE /api/eduhub/opportunities/<id>` - Delete opportunity
+- `GET /api/eduhub/settings` - Get settings
+- `PUT /api/eduhub/settings` - Update settings
+
+### AI Features
+- `POST /api/eduhub/ai/advisor` - Get AI advisor recommendations
+- `POST /api/eduhub/ai/chat` - Chat with AI
+
+### ML Features
+- `POST /api/ml/recommendations` - Get ML recommendations
+- `POST /api/ml/tasks/predict-priority` - Predict task priority
+- `POST /api/ml/mood/predict` - Predict mood
+- `POST /api/ml/notes/classify` - Classify note
+
 ## Project Structure
 
-Create a virtual environment (optional but recommended):
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activateCreates a new user account
-- Request Body: `{ "name": "string", "email": "string", "password": "string" }`
-- Response: `{ "token": "string", "user": { "id": "string", "email": "string", "name": "string" } }`
-
-**POST /api/auth/login**
-- Authenticates user and returns JWT token
-- Request Body: `{ "email": "string", "password": "string" }`
-- Response: `{ "token": "string", "user": { "id": "string", "email": "string", "name": "string" } }`
-
-**GET /api/auth/me**
-- Returns current authenticated user information
-- Headers: `Authorization: Bearer <token>`
-- Response: `{ "user": { "id": "string", "email": "string", "name": "string" } }`
-
-### Document Processing Endpoints
-
-**POST /api/verify**
-- Processes invoice and PO documents
-- Content-Type: `multipart/form-data`
-- Form Fields: `invoice` (file), `po` (file)
-- Query Parameters: `debug=1` (optional, for debug output)
-- Response: `{ "id": "string", "invoice": {}, "po": {}, "result": {}, "createdAt": "ISO string" }`
-
-### Records Endpoints
-
-**GET /api/records**
-- Retrieves list of processed records
-- Query Parameters: `limit` (default: 20)
-- Response: `{ "items": [] }`
-
-**GET /api/records/:id**
-- Retrieves detailed information for a specific record
-- Response: `{ "id": "string", "invoice": {}, "po": {}, "result": {}, "createdAt": "ISO string" }`
-
-### Statistics Endpoint
-
-**GET /api/stats**
-- Returns dashboard statistics
-- Response: `{ "matched": number, "discrepancies": number, "pending": number, "lastExport": "ISO string" }`
-
-### Export Endpoints
-
-**POST /api/export/csv**
-- Generates corrected invoice CSV
-- Request Body: `{ "recordIds": [], "dateFrom": "ISO string", "dateTo": "ISO string", "status": "string" }`
-- Response: `{ "csv": "string", "filename": "string" }`
-
-**POST /api/export/report**
-- Generates discrepancy report CSV
-- Request Body: `{ "recordIds": [], "dateFrom": "ISO string", "dateTo": "ISO string" }`
-- Response: `{ "csv": "string", "filename": "string" }`
-
-**GET /api/export/history**
-- Retrieves export history
-- Query Parameters: `limit` (default: 20)
-- Response: `{ "items": [] }`
-
-### Health Check
-
-**GET /api/health**
-- Server health status
-- Response: `{ "ok": true }`
-
-## Data Extraction
-
-The system extracts the following fields from documents:
-
-### Purchase Order Fields
-- Vendor Name
-- PO Number
-- Issue Date
-- Line Items (Item Name, Quantity, Unit Price, Subtotal)
-- Grand Total
-
-### Invoice Fields
-- Vendor Name
-- Invoice Number
-- Order ID
-- Invoice Date
-- Line Items (Item Name, Quantity, Unit Price, Subtotal)
-- Grand Total
-
-## Comparison Logic
-
-Records are classified into three status categories:
-
-- **Matched**: All fields align within configured tolerances
-- **Mismatch**: Significant discrepancies detected in critical fields
-- **Partial**: Minor quantity or price variations, otherwise matched
-
-Comparison tolerances can be configured in the Settings page.
-
-## CSV Export Format
-
-Exported CSV files include the following columns:
-- Item
-- Quantity
-- Price
-- Total
-- Status
-- Order_ID
-- Vendor
-- Grand_Total
-
-A summary row with GRAND TOTAL is automatically appended.
-
-## Configuration
-
-### Backend Environment Variables
-
-- `MONGO_URI`: MongoDB connection string
-- `JWT_SECRET`: Secret key for JWT token signing
-- `JWT_EXP_MIN`: JWT token expiration time in minutes
-- `PORT`: Backend server port
-- `CORS_ORIGIN`: Allowed CORS origin for frontend
-- `UPLOAD_DIR`: Directory for temporary file storage
-- `ADMIN_KEY`: Admin key for administrative endpoints
-
-### Frontend Environment Variables
-
-- `VITE_API_URL`: Backend API base URL
+```
+Futurix AI/
+├── backend/
+│   ├── app.py              # Main Flask application
+│   ├── ml_models.py        # ML models (XGBoost, KNN, SVM, PCA)
+│   ├── requirements.txt    # Python dependencies
+│   └── .env               # Environment variables
+├── frontend/
+│   ├── src/
+│   │   ├── pages/         # React pages
+│   │   ├── components/    # React components
+│   │   ├── lib/          # API client
+│   │   └── utils/        # Utilities
+│   └── package.json      # Node dependencies
+└── README.md
+```
 
 ## Development
 
 ### Backend Development
 
-Run in development mode with auto-reload:
+Run in development mode:
 ```bash
 python app.py
 ```
-
-Note: Auto-reloader is disabled by default to prevent OCR model reload issues.
 
 ### Frontend Development
 
@@ -325,48 +221,38 @@ Build for production:
 npm run build
 ```
 
-Preview production build:
-```bash
-npm run preview
-```
+## ML Models
 
-## Troubleshooting
+### Task Priority Prediction
+- **Model**: XGBoost Classifier
+- **Features**: Keywords, deadline, difficulty, urgency, time context
+- **Output**: High/Medium/Low priority
 
-### Common Issues
+### Mood Prediction
+- **Model**: XGBoost + PCA
+- **Features**: 14 features (mood, energy, stress, focus, productivity, etc.)
+- **PCA**: Reduces to 3 principal components
+- **Output**: Predicted mood category
 
-**OCR Not Extracting Data**
-- Verify Tesseract OCR is installed and accessible
-- Check that uploaded files are clear and readable
-- Review backend logs for OCR error messages
-- Ensure Poppler is installed for PDF processing (Linux/macOS)
+### Recommendations
+- **Model**: KNN (User-based collaborative filtering)
+- **Features**: User ratings and item preferences
+- **Output**: Recommended items
 
-**MongoDB Connection Errors**
-- Verify MongoDB is running
-- Check MONGO_URI in .env file
-- Ensure network connectivity to MongoDB instance
-
-**CORS Errors**
-- Verify CORS_ORIGIN matches frontend URL
-- Check backend CORS configuration
-- Ensure backend is running
-
-**Import Errors**
-- Verify all dependencies are installed
-- Check Python and Node.js versions match requirements
-- Reinstall dependencies if issues persist
-
-**Port Already in Use**
-- Change PORT in .env file
-- Kill process using the port
-- Use different port for frontend/backend
+### Note Classification
+- **Model**: SVM with TF-IDF
+- **Features**: Note text content
+- **Output**: Subject category
 
 ## Security Considerations
 
 - Store JWT_SECRET securely in production
 - Use strong passwords for user accounts
 - Configure proper CORS origins for production
-- Implement rate limiting for API endpoints
 - Use HTTPS in production
 - Secure MongoDB with authentication
-- Regularly update dependencies for security patches
+- Keep GEMINI_API_KEY private
 
+## License
+
+This project is part of the Futurix AI platform.

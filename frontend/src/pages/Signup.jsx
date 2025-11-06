@@ -35,7 +35,7 @@ export default function Signup() {
             </svg>
             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-white"></div>
           </div>
-          <span className="font-bold text-2xl bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">InvoSync</span>
+          <span className="font-bold text-2xl bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">EduHub</span>
         </div>
         <h1 className="text-xl font-semibold mb-4">Create your account</h1>
         <div className="grid gap-3">
