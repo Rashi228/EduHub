@@ -9,7 +9,7 @@ Create a file named `.env` in the `backend` directory with the following content
 MONGO_URI=mongodb://localhost:27017/eduhub
 
 # JWT Configuration
-JWT_SECRET=eduhub-secret-key-change-in-production
+JWT_SECRET=your-jwt-secret-here
 JWT_EXP_MIN=60
 
 # Server Configuration
@@ -20,7 +20,7 @@ CORS_ORIGIN=http://localhost:5173
 UPLOAD_DIR=./uploads
 
 # Gemini AI Configuration
-GEMINI_API_KEY=AIzaSyCFwfbe_RVkAKW5syxNUrqGRq1dGLw8Es4
+GEMINI_API_KEY=your-gemini-api-key
 
 # Flask Debug (set to 'true' for debug mode, but disabled on Windows by default)
 FLASK_DEBUG=false

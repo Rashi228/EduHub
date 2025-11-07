@@ -31,7 +31,7 @@
 - ✅ Multiple personality styles (Layman, Girly Bossy, CEO, Friendly, Energetic)
 - ✅ Conversation history
 - ✅ Backend: `/api/eduhub/ai/chat`
-- ⚠️ Requires: `.env` file with `GEMINI_API_KEY=AIzaSyCFwfbe_RVkAKW5syxNUrqGRq1dGLw8Es4`
+- ⚠️ Requires: `.env` file with `GEMINI_API_KEY=<your-gemini-api-key>`
 
 ### 4. **Mood Tracker** 😊
 - ✅ Status: **WORKING**
