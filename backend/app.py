@@ -8,7 +8,7 @@ import google.generativeai as genai
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from pymongo import MongoClient, DESCENDING
+from pymongo import MongoClient, DESCENDING, ASCENDING
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from dotenv import load_dotenv
@@ -21,7 +21,8 @@ from bson import ObjectId
 # from export import generate_csv_from_records
 from ml_models import (
 	get_recommendation_engine, get_task_prioritizer, 
-	get_mood_predictor, get_note_classifier
+	get_mood_predictor, get_note_classifier,
+	get_task_scheduler,
 )
 
 # Logging
@@ -1819,6 +1820,109 @@ def ml_classify_note():
 @app.get('/api/health')
 def health():
 	return jsonify({"ok": True})
+
+@app.post('/api/eduhub/ai/schedule')
+def ai_schedule_optimizer():
+	"""Genetic algorithm powered schedule optimizer with Gemini narration."""
+	try:
+		user_id = get_user_id()
+		if not user_id:
+			return jsonify({"error": "unauthorized"}), 401
+
+		pending_cursor = todos.find({"userId": user_id, "completed": False}).sort("deadline", DESCENDING)
+		pending_todos = list(pending_cursor)
+
+		if not pending_todos:
+			return jsonify({
+				"schedule": [],
+				"metadata": {"fitness": 0.0, "evaluatedGenerations": 0, "prioritySummary": {}},
+				"analysis": {
+					"summary": "No pending tasks found.",
+					"recommendations": [],
+					"breakAdvice": None,
+					"nextSteps": []
+				}
+			}), 200
+
+		recent_mood = moods.find_one({"userId": user_id}, sort=[("date", DESCENDING)])
+		today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+		today_focus = list(focus_sessions.find({
+			"userId": user_id,
+			"startTime": {"$gte": today_start},
+			"status": "completed"
+		}))
+		total_focus_today = sum(session.get("duration", 0) for session in today_focus)
+
+		sanitised_tasks = []
+		for todo in pending_todos:
+			task_data = dict(todo)
+			task_data["id"] = str(task_data.get("_id"))
+			task_data.pop("_id", None)
+			for field in ("deadline", "createdAt", "updatedAt"):
+				value = task_data.get(field)
+				if isinstance(value, datetime):
+					task_data[field] = value.isoformat()
+			sanitised_tasks.append(task_data)
+
+		ga_context = {
+			"mood": recent_mood.get("mood") if recent_mood else None,
+			"focusMinutes": total_focus_today // 60,
+		}
+
+		scheduler = get_task_scheduler(user_id)
+		ga_result = scheduler.optimize(sanitised_tasks, context=ga_context)
+
+		analysis_payload = {
+			"summary": "Genetic optimizer ran without neural narration.",
+			"recommendations": [
+				{
+					"taskTitle": item.get("title", "Untitled"),
+					"reason": f"Rank {item.get('gaRank')} with heuristic priority {item.get('heuristicPriority')}"
+				}
+				for item in ga_result.get("schedule", [])[:3]
+			],
+			"breakAdvice": None,
+			"nextSteps": []
+		}
+
+		if gemini_model:
+			try:
+				heuristic_weights = scheduler.prioritizer.heuristic_weights
+				prompt_context = {
+					"mood": ga_context.get("mood") or "unknown",
+					"focusMinutes": ga_context.get("focusMinutes"),
+					"heuristicWeights": heuristic_weights,
+					"fuzzyRules": [
+						"If mood is 'okay' and task difficulty is 'medium', elevate to high priority",
+						"If mood is low (sad/tired) and difficulty is hard, defer unless urgent"
+					],
+					"schedule": ga_result.get("schedule", []),
+					"metadata": ga_result.get("metadata", {}),
+				}
+				prompt = (
+					"You are a neural productivity strategist coordinating with a heuristic "
+					"+ genetic algorithm engine."
+					" Summarize the optimized schedule, referencing urgency, days until deadlines, "
+					"difficulty, and the fuzzy rules provided. Explain how the heuristic baseline "
+					"and genetic evolution interacted."
+					" Return a JSON object with keys: summary, recommendations (array with taskTitle"
+					" and reason), breakAdvice (object with shouldBreak boolean and message), and"
+					" nextSteps (array of short actions)."
+					f" Context: {json.dumps(prompt_context, ensure_ascii=False)}"
+				)
+				response = gemini_model.generate_content(prompt)
+				analysis_payload = json.loads(response.text)
+			except Exception as gen_err:
+				logger.error(f"Gemini schedule narration failed: {gen_err}")
+
+		return jsonify({
+			"schedule": ga_result.get("schedule", []),
+			"metadata": ga_result.get("metadata", {}),
+			"analysis": analysis_payload,
+		}), 200
+	except Exception as e:
+		logger.exception("Schedule optimization error: %s", e)
+		return jsonify({"error": "schedule_failed"}), 500
 
 
 if __name__ == '__main__':
